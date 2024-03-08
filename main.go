@@ -56,6 +56,20 @@ func (config apiConfig) newUser() http.HandlerFunc {
 	}
 }
 
+func (config apiConfig) getByAPIKey() http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		apiKey := request.Header.Get("Authorization")
+		userByAPIkey, err := config.DB.GetUserByAPIkey(request.Context(), apiKey)
+		if err != nil {
+			panic(err)
+		}
+		marshal, err := json.Marshal(userByAPIkey)
+		if err != nil {
+			panic(err)
+		}
+		writer.Write(marshal)
+	}
+}
 func respondWithJSON(w http.ResponseWriter, status int, payload any) {
 
 	w.Header().Add("Content-Type", "application/json")
@@ -112,6 +126,7 @@ func main() {
 	v1.Get("/readiness", handlerReadiness())
 	v1.Get("/error", handleError())
 	v1.Post("/users", config.newUser())
+	v1.Get("/users", config.getByAPIKey())
 	mainRouter.Mount("/v1", v1)
 	server := http.Server{
 		Handler: mainRouter,
