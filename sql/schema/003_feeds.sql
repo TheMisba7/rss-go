@@ -13,6 +13,5 @@ alter table feeds add constraint fk_feeds_user foreign key (user_id) references 
 
 
 -- +goose Down
-
 alter table feeds drop constraint fk_feeds_user;
 drop table feeds;
