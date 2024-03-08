@@ -34,7 +34,26 @@ type user struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func (config apiConfig) newUser() http.HandlerFunc {
+type feed struct {
+	Id        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Url       string    `json:"url"`
+	UserId    uuid.UUID `json:"user_id"`
+}
+
+type authedHandler func(http.ResponseWriter, *http.Request, database.User)
+
+func parseJson(req *http.Request, target interface{}) {
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(target)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (config *apiConfig) newUser() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		now := time.Now()
 		user := user{
@@ -51,23 +70,40 @@ func (config apiConfig) newUser() http.HandlerFunc {
 			fmt.Println("my err")
 			panic(err)
 		}
-		marshal, _ := json.Marshal(createUser)
-		writer.Write(marshal)
+		respondWithJSON(writer, 200, createUser)
 	}
 }
 
-func (config apiConfig) getByAPIKey() http.HandlerFunc {
+func (config *apiConfig) createFeed(w http.ResponseWriter, req *http.Request, user database.User) {
+	now := time.Now()
+	newFeed := feed{
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	parseJson(req, &newFeed)
+	newFeed.UserId = user.ID
+	feedParams := database.CreateFeedParams{
+		ID:        uuid.New(),
+		Name:      newFeed.Name,
+		CreatedAt: newFeed.CreatedAt,
+		UpdatedAt: newFeed.UpdatedAt,
+		UserID:    newFeed.UserId,
+		Url:       newFeed.Url,
+	}
+	createFeed, err := config.DB.CreateFeed(req.Context(), feedParams)
+	if err != nil {
+		panic(err)
+	}
+	respondWithJSON(w, 201, createFeed)
+}
+func (config *apiConfig) getByAPIKey() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		apiKey := request.Header.Get("Authorization")
 		userByAPIkey, err := config.DB.GetUserByAPIkey(request.Context(), apiKey)
 		if err != nil {
 			panic(err)
 		}
-		marshal, err := json.Marshal(userByAPIkey)
-		if err != nil {
-			panic(err)
-		}
-		writer.Write(marshal)
+		respondWithJSON(writer, 200, userByAPIkey)
 	}
 }
 func respondWithJSON(w http.ResponseWriter, status int, payload any) {
@@ -105,7 +141,20 @@ func handleError() http.HandlerFunc {
 		respondWithJSON(writer, 500, err)
 	}
 }
+func (config *apiConfig) middlewareAuth(handler authedHandler) http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		authHeader := request.Header.Get("Authorization")
+		if len(authHeader) == 0 {
+			respondWithError(writer, 401, "API Key not found.")
+		}
 
+		userByAPIkey, err := config.DB.GetUserByAPIkey(request.Context(), authHeader)
+		if err != nil {
+			return
+		}
+		handler(writer, request, userByAPIkey)
+	}
+}
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -127,6 +176,10 @@ func main() {
 	v1.Get("/error", handleError())
 	v1.Post("/users", config.newUser())
 	v1.Get("/users", config.getByAPIKey())
+
+	//feeds
+	v1.Post("/feeds", config.middlewareAuth(config.createFeed))
+
 	mainRouter.Mount("/v1", v1)
 	server := http.Server{
 		Handler: mainRouter,
