@@ -69,5 +69,8 @@ func (config *ApiConfig) RegisterRoutes() http.Handler {
 	v1.Get("/feed_follow", config.middlewareAuth(config.getFeedFollowByUser))
 	v1.Delete("/feed_follow/{feedFollowId}", config.middlewareAuth(config.unfollow))
 
+	//posts
+	v1.Get("/posts", config.middlewareAuth(config.getPostsByUser))
+
 	return v1
 }

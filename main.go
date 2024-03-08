@@ -11,7 +11,6 @@ import (
 	"os"
 	"rss-aggregator/handlers"
 	"rss-aggregator/internal/database"
-	"rss-aggregator/scraper"
 )
 
 func main() {
@@ -38,7 +37,7 @@ func main() {
 	}
 
 	//start scraper in separate goroutine
-	go scraper.StartScrapper(2, 10, config.DB)
+	//go scraper.StartScrapper(3, 60, config.DB)
 
 	err = server.ListenAndServe()
 	if err != nil {
