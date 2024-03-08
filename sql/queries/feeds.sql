@@ -21,3 +21,17 @@ SELECT * FROM feed_follow where user_id = $1;
 SELECT * FROM feed_follow where id = $1;
 -- name: DeleteFeedFollow :exec
 DELETE FROM feed_follow WHERE id = $1;
+
+-- name: GetNextFeedsToFetch :many
+SELECT * FROM feeds
+ORDER BY
+    CASE
+        WHEN last_fetched_at IS NULL THEN 0
+        ELSE 1
+        END,
+    last_fetched_at ASC
+    LIMIT $1;
+
+
+-- name: MarkFeedFetched :exec
+update feeds set last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP where id = $1;
